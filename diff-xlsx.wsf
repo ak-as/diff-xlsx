@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<package>
+	<job id="main">
+
+		<resource id="COMPARE_TOOL_PATH">C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Microsoft Office ツール\Spreadsheet Compare.lnk</resource>
+
+		<object id="fso" progid="Scripting.FileSystemObject" />
+		<object id="shell" progid="WScript.Shell" />
+
+		<script language="JScript">
+		<![CDATA[
+
+			// 比較ツール(Spreadsheet Compare)のパス定義
+			var COMPARE_TOOL_PATH = getResource("COMPARE_TOOL_PATH");
+
+			/**
+			 * メイン処理
+			 */
+			function main() {
+
+				try {
+
+					// 比較ツールのパス検証
+					validateCompareToolPath();
+
+					// 比較対象のファイルのパス取得
+					var filePaths = getTargetFilePaths();
+
+					// パラメータファイルの作成
+					var paramFilePath = createParameterFile(filePaths);
+
+					// 比較ツールの実行
+					executeCompareTool(paramFilePath);
+
+				} catch (e) {
+
+					if (typeof e == "string") {
+						WScript.Echo(e);
+					} else if (Object.prototype.toString.call(e) == "object Error") {
+						WScript.Echo(e.message);
+					} else {
+						throw e;
+					}
+				}
+			}
+
+			/**
+			 * 比較ツールのパス検証
+			 */
+			function validateCompareToolPath() {
+
+				if (!COMPARE_TOOL_PATH) {
+					throw "変数 COMPARE_TOOL_PATH に Spreadsheet Compare ツールのパスが定義されていません。";
+				}
+
+				if (!fso.FileExists(COMPARE_TOOL_PATH)) {
+					throw "変数 COMPARE_TOOL_PATH に定義されたパスにはファイルが存在しません。PATH=" + COMPARE_TOOL_PATH;
+				}
+
+				if (fso.GetExtensionName(COMPARE_TOOL_PATH).toLowerCase() == "lnk") {
+					var targetPath = shell.CreateShortcut(COMPARE_TOOL_PATH).TargetPath
+					if (!fso.FileExists(targetPath)) {
+						throw "変数 COMPARE_TOOL_PATH に定義されたショートカットのリンク先パスにはファイルが存在しません。PATH=" + COMPARE_TOOL_PATH;
+					}
+				}
+			}
+
+			/**
+			 * 比較対象のファイルのパス取得
+			 */
+			function getTargetFilePaths() {
+
+				if (WScript.Arguments.length != 2) {
+					throw "比較対象の2つのExcelファイルを指定して下さい。";
+				}
+
+				var filePaths = [];
+
+				for (var i = 0; i < WScript.Arguments.length; i++) {
+					var argPath = WScript.Arguments(i);
+					var filePath = argPath;
+					var linkTargetPath = "";
+
+					// ショートカットの場合、元ファイルのパスを取得
+					var extension = fso.GetExtensionName(filePath).toLowerCase();
+					if (extension == "lnk") {
+						linkTargetPath = shell.CreateShortcut(filePath).TargetPath;
+						if (!linkTargetPath) {
+							throw "指定のショートカットのリンク先パスが取得できませんでした。PATH=" + filePath;
+						}
+						filePath = linkTargetPath;
+						extension = fso.GetExtensionName(filePath).toLowerCase();
+					}
+
+					// ファイルの拡張子チェック
+					if (extension != "xlsx") {
+						throw "比較対象のExcelファイルは xlsx 形式のみ対応しています。PATH=" + argPath;
+					}
+
+					// ファイルの存在チェック
+					if (!fso.FileExists(filePath)) {
+						throw "指定のパスにファイルが存在しません。PATH=" + argPath;
+					}
+
+					filePaths.push(filePath);
+				}
+
+				return filePaths;
+			}
+
+			/**
+			 * パラメータファイルの作成
+			 */
+			function createParameterFile(filePaths) {
+
+				var paramFilePath = "";
+
+				// パラメータファイルのパスの作成
+				var tempDirPath = fso.GetSpecialFolder(2);
+				do {
+					paramFilePath = fso.BuildPath(tempDirPath, fso.GetTempName());
+				} while (fso.FileExists(paramFilePath));
+
+				// パラメータファイルに引数のパスを書き込む
+				var ts = fso.OpenTextFile(paramFilePath, 2, true, -1);
+				for (var i = 0; i < filePaths.length; i++) {
+					ts.WriteLine(filePaths[i]);
+				}
+				ts.Close();
+
+				return paramFilePath;
+			}
+
+			/**
+			 * 比較ツールの実行
+			 */
+			function executeCompareTool(paramFilePath) {
+
+				var cmd = [];
+				cmd.push('"' + COMPARE_TOOL_PATH + '"');
+				cmd.push('"' + paramFilePath + '"');
+				shell.Run(cmd.join(" "), 1, false);
+			}
+
+			// メイン処理の実行
+			main();
+
+		]]>
+		</script>
+	</job>
+</package>
+
+
+
